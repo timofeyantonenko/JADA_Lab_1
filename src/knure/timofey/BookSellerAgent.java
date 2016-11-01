@@ -24,7 +24,7 @@ public class BookSellerAgent extends Agent {
         //инициализируем необхимые переменные агента
         catalogue = new Hashtable();
         myGui = new BookSellerGui(this);
-        myGui.show(); // отобразим интерфейс
+        myGui.showGui();  // отобразим интерфейс
 
         // Зарегестрируем книго-продажный сервис в желтой странице
         DFAgentDescription dfd = new DFAgentDescription();
