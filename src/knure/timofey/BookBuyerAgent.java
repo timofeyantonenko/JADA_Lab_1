@@ -19,10 +19,7 @@ public class BookBuyerAgent extends Agent {
     private String targetBookTitle; // Название необходимой кники
 
     // Массив агентов, к которым будет делаться запрос на наличие книги.
-    private AID[] sellerAgents = {
-                                    new AID("seller1", AID.ISLOCALNAME),
-                                    new AID("seller1", AID.ISLOCALNAME)
-                                  };
+    private AID[] sellerAgents;
 
     String nickname = "Peter"; // Имя агента
     AID id = new AID(nickname, AID.ISLOCALNAME); // Идентификатор агента
