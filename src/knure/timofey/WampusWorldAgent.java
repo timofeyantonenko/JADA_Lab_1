@@ -69,7 +69,10 @@ public class WampusWorldAgent extends Agent {
             fe.printStackTrace();
         }
         // добавим модели моведения
-        addBehaviour(new DiggerCommunicationPerformer());
+        addBehaviour(new DiggerConnectPerformer());
+        addBehaviour(new DiggerArrowPerformer());
+        addBehaviour(new DiggerGoldPerformer());
+        addBehaviour(new DiggerMovePerformer());
 //        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 //        try {
 //            String s = br.readLine();
@@ -82,7 +85,7 @@ public class WampusWorldAgent extends Agent {
 
     private void generateMap() {
         this.wampusMap = new Room[NUM_OF_ROWS][NUM_OF_COLUMNS];
-        this.wampusMap[0][0] = new Room(START);
+        this.wampusMap[0][0] = new Room();
         this.wampusMap[0][1] = new Room(BREEZE);
         this.wampusMap[0][2] = new Room(PIT);
         this.wampusMap[0][3] = new Room(BREEZE);
@@ -113,24 +116,21 @@ public class WampusWorldAgent extends Agent {
 
         }
     }
-    private class DiggerCommunicationPerformer extends CyclicBehaviour {
+    private class DiggerConnectPerformer extends CyclicBehaviour {
         public void action() {
             MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.CFP);
             ACLMessage msg = myAgent.receive(mt);
             if (msg != null) {
                 // Сообщение CFP получено. Теперь его нужно обработать.
                 String message = msg.getContent();
-                System.out.println("I got the message! Message is: "  + message);
                 if (Objects.equals(message, DiggerAgent.GO_INSIDE)){
                     AID current_digger = msg.getSender();
                     Coords digger_coords = diggers.get(current_digger);
                     if (digger_coords == null){
                         diggers.put(current_digger, new Coords(0, 0));
-                        System.out.println("Message from " + msg.getSender());
                     }
                     else {
                         diggers.put(current_digger, new Coords(0, 0));
-                        System.out.println("Message from " + msg.getSender());
                     }
                     ACLMessage reply = msg.createReply();
                     reply.setPerformative(ACLMessage.CONFIRM);
@@ -138,6 +138,136 @@ public class WampusWorldAgent extends Agent {
                     myAgent.send(reply);
                 }
 //
+            }
+            else {
+                block();
+            }
+        }
+    }
+    private class DiggerArrowPerformer extends CyclicBehaviour {
+        public void action() {
+            MessageTemplate mt = MessageTemplate.MatchPerformative(DiggerAgent.SHOOT_ARROW);
+            ACLMessage msg = myAgent.receive(mt);
+            if (msg != null) {
+                // Сообщение CFP получено. Теперь его нужно обработать.
+
+                ACLMessage reply = msg.createReply();
+                reply.setPerformative(DiggerAgent.SHOOT_ARROW);
+
+                String message = msg.getContent();
+                AID current_digger = msg.getSender();
+                Coords digger_coords = diggers.get(current_digger);
+
+                int row = digger_coords.row;
+                int column = digger_coords.column;
+                String answer = "";
+                if (message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_DOWN))){
+                    for (int i = 0; i < row; ++i){
+                        if (wampusMap[i][column].events.contains(WampusWorldAgent.roomCodes.get(WAMPUS))){
+                            answer = NavigatorAgent.SCREAM;
+                        }
+                    }
+                }
+                else if(message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_UP))){
+                    for (int i = row+1; i < NUM_OF_ROWS; ++i){
+                        if (wampusMap[i][column].events.contains(WampusWorldAgent.roomCodes.get(WAMPUS))){
+                            answer = NavigatorAgent.SCREAM;
+                        }
+                    }
+                }
+                else if(message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_LEFT))){
+                    for (int i = 0; i < column; ++i){
+                        if (wampusMap[row][i].events.contains(WampusWorldAgent.roomCodes.get(WAMPUS))){
+                            answer = NavigatorAgent.SCREAM;
+                        }
+                    }
+                }
+                else if (message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_RIGHT))){
+                    for (int i = column+1; i < NUM_OF_COLUMNS; ++i){
+                        if (wampusMap[row][i].events.contains(WampusWorldAgent.roomCodes.get(WAMPUS))){
+                            answer = NavigatorAgent.SCREAM;
+                        }
+                    }
+                }
+
+                reply.setContent(answer);
+
+                myAgent.send(reply);
+            }
+            else {
+                block();
+            }
+        }
+    }
+    private class DiggerMovePerformer extends CyclicBehaviour {
+        public void action() {
+            MessageTemplate mt = MessageTemplate.MatchPerformative(DiggerAgent.MOVE);
+            ACLMessage msg = myAgent.receive(mt);
+            if (msg != null) {
+                // Сообщение CFP получено. Теперь его нужно обработать.
+
+                ACLMessage reply = msg.createReply();
+                reply.setPerformative(DiggerAgent.MOVE);
+
+                String message = msg.getContent();
+                AID current_digger = msg.getSender();
+                Coords digger_coords = diggers.get(current_digger);
+                System.out.println("World say: Current agent coords: " + digger_coords.row + " | " + digger_coords.column);
+                if (digger_coords == null){
+                    diggers.put(current_digger, new Coords(0, 0));
+                    digger_coords = diggers.get(current_digger);
+                }
+                int row = digger_coords.row;
+                int column = digger_coords.column;
+                if (message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_DOWN))){
+                    row -= 1;
+                }
+                else if(message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_UP))){
+                    row += 1;
+                }
+                else if(message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_LEFT))){
+                    column -=1;
+                }
+                else if (message.equals(DiggerAgent.actionCodes.get(DiggerAgent.LOOK_RIGHT))){
+                    column += 1;
+                }
+                if (row > -1 && column > -1 && row < NUM_OF_ROWS && column < NUM_OF_COLUMNS){
+                    digger_coords.column = column;
+                    digger_coords.row = row;
+                    reply.setContent(wampusMap[row][column].events.toString());
+                }
+                else {
+                    reply.setContent(String.valueOf(new ArrayList<String>(){{
+                        add(NavigatorAgent.BUMP);
+                    }}));
+                }
+                myAgent.send(reply);
+            }
+            else {
+                block();
+            }
+        }
+    }
+    private class DiggerGoldPerformer extends CyclicBehaviour {
+        public void action() {
+            MessageTemplate mt = MessageTemplate.MatchPerformative(DiggerAgent.TAKE_GOLD);
+            ACLMessage msg = myAgent.receive(mt);
+            if (msg != null) {
+                // Сообщение CFP получено. Теперь его нужно обработать.
+                String message = msg.getContent();
+                AID current_digger = msg.getSender();
+                Coords digger_coords = diggers.get(current_digger);
+                if (digger_coords == null){
+                    diggers.put(current_digger, new Coords(0, 0));
+                }
+                else {
+                    if (wampusMap[digger_coords.row][digger_coords.column].events.contains(WampusWorldAgent.roomCodes.get(GOLD))){
+                        ACLMessage reply = msg.createReply();
+                        reply.setPerformative(DiggerAgent.TAKE_GOLD);
+                        reply.setContent("GOLD");
+                        myAgent.send(reply);
+                    }
+                }
             }
             else {
                 block();

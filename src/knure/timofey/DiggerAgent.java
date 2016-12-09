@@ -65,7 +65,6 @@ public class DiggerAgent extends Agent {
                     DFAgentDescription[] result = DFService.search(myAgent, template);
                     if (result != null && result.length > 0) {
                         wampusWorld = result[0].getName(); // Возьмем первый попавшийся
-                        System.out.println("I found the world!!! Name is: " + wampusWorld);
                         myAgent.addBehaviour(new WampusWorldPerformer());
                         ++step;
                     } else {
@@ -113,7 +112,6 @@ public class DiggerAgent extends Agent {
                         if (reply.getPerformative() == ACLMessage.CONFIRM) {
                             // Это предложение (так как не null)
                             String answer = reply.getContent();
-                            System.out.println("Answer from world is: " + answer);
                             currentWorldState = answer;
                             myAgent.addBehaviour(new NavigatorAgentPerformer());
                             step = 2;
@@ -145,7 +143,6 @@ public class DiggerAgent extends Agent {
                         DFAgentDescription[] result = DFService.search(myAgent, template);
                         if (result != null && result.length > 0) {
                             navigationAgent = result[0].getName(); // Возьмем первый попавшийся
-                            System.out.println("I found the navigator!!! Name is: " + navigationAgent);
                             ++step;
                         } else {
                             try {
@@ -159,7 +156,6 @@ public class DiggerAgent extends Agent {
                     }
                 }
                 case 1: {
-                    System.out.println("IN STEP 1");
                     ACLMessage order = new ACLMessage(ACLMessage.INFORM);
                     order.addReceiver(navigationAgent);
                     order.setContent(currentWorldState);
@@ -172,24 +168,22 @@ public class DiggerAgent extends Agent {
                     step = 2;
                 }
                 case 2: {
-                    System.out.println("IN step 2");
-                    // Получаем руководство к действиям
+                    // Получаем руководство к действиям и делаем это в мире
                     ACLMessage reply = myAgent.receive(mt);
                     if (reply != null) {
-                        System.out.println("REPLY NOT NULL");
                         // Ответ получен
                         if (reply.getPerformative() == ACLMessage.PROPOSE) {
                             String actions = reply.getContent();
                             actions = actions.substring(1, actions.length()-1);
                             String[] instructions = actions.split(", ");
                             if (instructions.length == 1){
-                                //takeGold();
+                                sendTakeGoldMessage();
                             }
                             else if (instructions.length == 2 && Objects.equals(instructions[1], actionCodes.get(SHOOT_ARROW))){
-
+                                sendShootMessage(instructions[0]);
                             }
                             else if (instructions.length == 2 && Objects.equals(instructions[1], actionCodes.get(MOVE))){
-
+                                sendMoveMessage(instructions[0]);
                             }
                             else {
                                 System.out.println("ERROR ACTIONS");
@@ -203,13 +197,72 @@ public class DiggerAgent extends Agent {
                     break;
 
                 }
+                case 3:
+                    //Получили ответ от мира
+//                    ACLMessage order = new ACLMessage(ACLMessage.INFORM);
+//                    order.addReceiver(navigationAgent);
+//                    order.setContent(currentWorldState);
+//                    order.setConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID);
+//                    order.setReplyWith("order"+System.currentTimeMillis());
+//                    myAgent.send(order);
+//                    // Подготавливаем шаблон чтобы получить ответ на информацию о нашем положении
+//                    mt = MessageTemplate.and(MessageTemplate.MatchConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID),
+//                            MessageTemplate.MatchInReplyTo(order.getReplyWith()));
+
+                    ACLMessage reply = myAgent.receive(mt);
+                    if (reply != null) {
+                        currentWorldState = reply.getContent();
+                        step = 1;
+                    }
+                    else {
+                        block();
+                    }
+                    break;
             }
         }
         @Override
         public boolean done() {
-            return step == 3;
+            return step == 4;
+        }
+
+        private void sendShootMessage(String instruction) {
+            ACLMessage order = new ACLMessage(SHOOT_ARROW);
+            order.addReceiver(wampusWorld);
+            order.setContent(instruction);
+            order.setConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID);
+            order.setReplyWith("order"+System.currentTimeMillis());
+            myAgent.send(order);
+            // Подготавливаем шаблон чтобы получить ответ на информацию о нашем положении
+            mt = MessageTemplate.and(MessageTemplate.MatchConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID),
+                    MessageTemplate.MatchInReplyTo(order.getReplyWith()));
+        }
+        private void sendTakeGoldMessage() {
+            ACLMessage order = new ACLMessage(TAKE_GOLD);
+            order.addReceiver(wampusWorld);
+            order.setContent("Take");
+            order.setConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID);
+            order.setReplyWith("order"+System.currentTimeMillis());
+            myAgent.send(order);
+            // Подготавливаем шаблон чтобы получить ответ на информацию о нашем положении
+            mt = MessageTemplate.and(MessageTemplate.MatchConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID),
+                    MessageTemplate.MatchInReplyTo(order.getReplyWith()));
+        }
+        private void sendMoveMessage(String instruction) {
+            ACLMessage order = new ACLMessage(MOVE);
+            order.addReceiver(wampusWorld);
+            order.setContent(instruction);
+            order.setConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID);
+            order.setReplyWith("order"+System.currentTimeMillis());
+            myAgent.send(order);
+            // Подготавливаем шаблон чтобы получить ответ на информацию о нашем положении
+            mt = MessageTemplate.and(MessageTemplate.MatchConversationId(NAVIGATOR_DIGGER_CONVERSATION_ID),
+                    MessageTemplate.MatchInReplyTo(order.getReplyWith()));
         }
     }
+
+
+
+
 
 
 }

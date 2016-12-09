@@ -47,7 +47,11 @@ public class NavigatorAgent extends Agent{
     String nickname = "NavigatorAgent"; // Имя агента
     AID id = new AID(nickname, AID.ISLOCALNAME); // Идентификатор агента
     private Hashtable<AID, Position> agents_coords; // ифнормация о координатах различных спелеологов
-    private Hashtable<AID, LinkedList<Position>> agentsWayStory;
+    private Hashtable<AID, LinkedList<int[]>> agentsWayStory; // Лист памяти маршрута для каждого агента
+
+    private boolean moveRoom = false;
+    private int agentX;
+    private int agentY;
 
     ImaginaryWampusWorld world; // Генерируемый на основании информации от агента-спелеолога мир
 
@@ -93,18 +97,21 @@ public class NavigatorAgent extends Agent{
             if (msg != null) {
                 // Сообщение CFP получено. Теперь его нужно обработать.
                 AID request_agent = msg.getSender();
+                if (agentsWayStory.get(request_agent) == null){
+                    LinkedList<int[]> agentWay = new LinkedList<>();
+                    agentsWayStory.put(request_agent, agentWay);
+                }
                 Position request_agent_position = agents_coords.get(request_agent);
                 if (request_agent_position == null){
                     request_agent_position = new Position();
-                    System.out.println("Agent before" + request_agent);
-                    System.out.println("Agent pos before" + request_agent_position.getY());
+                    agents_coords.put(request_agent, request_agent_position);
                 }
                 String location = msg.getContent();
                 location = location.substring(1, location.length()-1);
                 String[] room_info = location.split(", ");
                 System.out.println("ROOM INFO: " + Arrays.toString(room_info));
                 System.out.println("AGENT INFO: " + request_agent_position.getX() + " " + request_agent_position.getY());
-                String[] actions = get_actions(request_agent_position, room_info);
+                String[] actions = get_actions(request_agent, request_agent_position, room_info);
                 ACLMessage reply = msg.createReply();
 
                 reply.setPerformative(ACLMessage.PROPOSE);
@@ -117,15 +124,39 @@ public class NavigatorAgent extends Agent{
         }
     }
 
-    private String[] get_actions(Position request_agent_position, String[] room_info){
-        ImaginaryRoom checking_room = world.getWorldGrid().get(request_agent_position);
+    private String[] get_actions(AID request_agent, Position request_agent_position, String[] room_info){
+        System.out.println("Agent pos before: " + request_agent_position.getX() + " | " + request_agent_position.getY());
         int[] actions;
+        ImaginaryRoom checking_room = world.getWorldGrid().get(request_agent_position);
         if (checking_room == null)
-            {
-                checking_room = new ImaginaryRoom();
-                world.getWorldGrid().put(request_agent_position, checking_room);
+        {
+            checking_room = new ImaginaryRoom();
+            world.getWorldGrid().put(request_agent_position, checking_room);
+        }
+
+        if (! Arrays.asList(room_info).contains(BUMP)){
+            LinkedList<int[]> agentStory = agentsWayStory.get(request_agent);
+            agentStory.add(new int[]{request_agent_position.getX(), request_agent_position.getY()});
+            request_agent_position.setX(agentX);
+            request_agent_position.setY(agentY);
+            if (world.getWorldGrid().get(request_agent_position).getExist() != NavigatorAgent.ROOM_STATUS_TRUE){
+                world.getWorldGrid().get(request_agent_position).setExist(NavigatorAgent.ROOM_STATUS_TRUE);
+                System.out.println("MARKED THE EXISTENCE");
             }
-        if (checking_room.getOk() != NavigatorAgent.ROOM_OK) {
+            moveRoom = false;
+            }
+        else {
+            Position helpPosition = new Position(agentX, agentY);
+            world.getWorldGrid().get(helpPosition).setExist(NavigatorAgent.ROOM_STATUS_FALSE);
+        }
+        checking_room = world.getWorldGrid().get(request_agent_position);
+        if (checking_room == null)
+        {
+            checking_room = new ImaginaryRoom();
+            world.getWorldGrid().put(request_agent_position, checking_room);
+        }
+
+        if (checking_room.getOk() != NavigatorAgent.ROOM_STATUS_TRUE) {
             checking_room.setOk(NavigatorAgent.ROOM_STATUS_TRUE); // если мы в этой комнате,значит в нее можно переходить
         }
         for (String event: room_info){
@@ -138,27 +169,39 @@ public class NavigatorAgent extends Agent{
             actions = getNextRoomAction(request_agent_position, wampusPosition, DiggerAgent.SHOOT_ARROW);
         }
         else {
-            Position[] nextOkRooms = getOkNeighbors(request_agent_position); // список комнат, в которые безопасно идти
+            Position[] nextOkRooms = getOkNeighbors(request_agent, request_agent_position); // список комнат, в которые безопасно идти
             // TODO: Нужно еще отсечь тех, у кого нет пути к золоту
             int best_candidate = -1;
             int candidate_status = -1;
             for (int i=0; i < nextOkRooms.length; ++i){
                 Position candidate_room = nextOkRooms[i];
+                System.out.println("CANDIDATE CHECKING: " + candidate_room.getX() + " " + candidate_room.getY());
+                System.out.println("AGENT CHECKING: " + request_agent_position.getX() + " " + request_agent_position.getY());
                 if (candidate_room.getX() > request_agent_position.getX()){ // вправо
                     best_candidate = i;
+                    System.out.println("1");
                     break;
                 }
-                else if (candidate_room.getX() > request_agent_position.getX()){ // вверх
-                    if (candidate_status < 3)
+                else if (candidate_room.getY() > request_agent_position.getY()){ // вверх
+                    if (candidate_status < 3) {
+                        System.out.println("2");
                         candidate_status = 3;
+                    }
+                    else continue;
                 }
                 else if (candidate_room.getX() < request_agent_position.getX()){ // влево
-                    if (candidate_status < 2)
+                    if (candidate_status < 2) {
+                        System.out.println("3");
                         candidate_status = 2;
+                    }
+                    else continue;
                 }
                 else { // вниз
-                    if (candidate_status < 1)
+                    if (candidate_status < 1) {
+                        System.out.println("4");
                         candidate_status = 1;
+                    }
+                    else continue;
                 }
                 best_candidate = i;
             }
@@ -176,31 +219,49 @@ public class NavigatorAgent extends Agent{
     }
 
     private int[] getNextRoomAction(Position request_agent_position, Position nextOkRoom, int action) {
-        System.out.println("AGENT COORD: " + request_agent_position.getX() + " | " + request_agent_position.getY());
-        System.out.println("ADVICE COORD: " + nextOkRoom.getX() + " | " + nextOkRoom.getY());
+        agentX = request_agent_position.getX();
+        agentY = request_agent_position.getY();
         int look;
-        if (request_agent_position.getY() < nextOkRoom.getY())
+        if (request_agent_position.getY() < nextOkRoom.getY()) {
+            agentY += 1;
             look = DiggerAgent.LOOK_UP;
-        else if(request_agent_position.getY() > nextOkRoom.getY())
+        }
+        else if(request_agent_position.getY() > nextOkRoom.getY()) {
+            agentY -= 1;
             look = DiggerAgent.LOOK_DOWN;
-        else if(request_agent_position.getX() < nextOkRoom.getX())
+        }
+        else if(request_agent_position.getX() < nextOkRoom.getX()) {
+            agentX += 1;
             look = DiggerAgent.LOOK_RIGHT;
-        else look = DiggerAgent.LOOK_LEFT;
+        }
+        else {
+            agentX -= 1;
+            look = DiggerAgent.LOOK_LEFT;
+        }
+        moveRoom = true;
+
         return new int[] {look, action};
     }
 
-    private Position[] getOkNeighbors(Position request_agent_position) {
+    private Position[] getOkNeighbors(AID request_agent, Position request_agent_position) {
         Position[]  okNeighbors = getNeighborsPosition(request_agent_position);
         ArrayList<Position> okPositions = new ArrayList<>();
         for (Position position: okNeighbors){
-            System.out.println("CANDIDATE X: " + position.getX());
             this.world.getWorldGrid().putIfAbsent(position, new ImaginaryRoom()); // если комнаты
             // не существует - добавляем новую комнату на карте
             if ((this.world.getWorldGrid().get(position).getOk() == NavigatorAgent.ROOM_STATUS_TRUE
-                    && this.world.getWorldGrid().get(position).getNoWay() != NavigatorAgent.ROOM_STATUS_TRUE) ||
+                    && this.world.getWorldGrid().get(position).getNoWay() != NavigatorAgent.ROOM_STATUS_TRUE
+                    && this.world.getWorldGrid().get(position).getExist() != NavigatorAgent.ROOM_STATUS_FALSE
+            ) ||
                     this.world.getWorldGrid().get(position).getOk() == NavigatorAgent.ROOM_STATUS_NO_STATUS){
                 okPositions.add(position);
             }
+        }
+        if(okPositions.size() == 0){
+            int x = agentsWayStory.get(request_agent).getLast()[0];
+            int y = agentsWayStory.get(request_agent).getLast()[1];
+            okPositions.add(new Position(x, y));
+            this.world.getWorldGrid().get(request_agent_position).setNoWay(ROOM_STATUS_TRUE);
         }
         return okPositions.toArray(new Position[0]);
     }
@@ -211,10 +272,32 @@ public class NavigatorAgent extends Agent{
         Position leftNeighbor = new Position(request_agent_position.getX() - 1, request_agent_position.getY());
         Position bottomNeighbor = new Position(request_agent_position.getX(), request_agent_position.getY() - 1);
         ImaginaryRoom rightRoom = world.getWorldGrid().get(rightNeighbor);
+        if (rightRoom == null){
+            rightRoom = new ImaginaryRoom();
+            world.getWorldGrid().put(rightNeighbor, rightRoom);
+        }
         ImaginaryRoom upRoom = world.getWorldGrid().get(upNeighbor);
+        if (upRoom == null){
+            upRoom = new ImaginaryRoom();
+            world.getWorldGrid().put(rightNeighbor, upRoom);
+        }
         ImaginaryRoom leftRoom = world.getWorldGrid().get(leftNeighbor);
+        if (leftRoom == null){
+            leftRoom = new ImaginaryRoom();
+            world.getWorldGrid().put(rightNeighbor, leftRoom);
+        }
         ImaginaryRoom bottomRoom = world.getWorldGrid().get(bottomNeighbor);
-        return new ImaginaryRoom[]{ rightRoom, upRoom, leftRoom, bottomRoom };
+        if (bottomRoom == null){
+            bottomRoom = new ImaginaryRoom();
+            world.getWorldGrid().put(rightNeighbor, bottomRoom);
+        }
+        ImaginaryRoom[] rooms = new ImaginaryRoom[]{ rightRoom, upRoom, leftRoom, bottomRoom };
+//        for (ImaginaryRoom room: rooms){
+//            if (room == null){
+//                room = new ImaginaryRoom();
+//            }
+//        }
+        return rooms;
     }
     private Position[] getNeighborsPosition(Position request_agent_position){
         Position rightNeighbor = new Position(request_agent_position.getX() + 1, request_agent_position.getY());
@@ -235,6 +318,7 @@ public class NavigatorAgent extends Agent{
 //        ImaginaryRoom leftRoom = world.getWorldGrid().get(leftNeighbor);
 //        ImaginaryRoom bottomRoom = world.getWorldGrid().get(bottomNeighbor);
         ImaginaryRoom[] roomList = getNeighborsImaginaryRoom(request_agent_position); //new ImaginaryRoom[]{ rightRoom, upRoom, leftRoom, bottomRoom };
+
         if (currentRoom.getStench() == NavigatorAgent.ROOM_STATUS_TRUE){
             world.setWampusRoomCount(world.getWampusRoomCount() + 1);
             for (ImaginaryRoom room: roomList){
